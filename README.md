@@ -15,13 +15,20 @@ WAT-based Python workflow for an AI-niche YouTube content studio.
 
 1. Create and activate a virtual environment.
 2. Install dependencies: `pip install -r requirements.txt`
-3. Copy `.env.example` to `.env.local` or edit your existing `.env.local` and set `OPENROUTER_API_KEY`.
+3. Copy `.env.local.example` to `.env.local` and set `OPENROUTER_API_KEY`.
 4. Run: `python tools/run_pipeline.py`
 5. Launch UI: `python tools/run_ui.py`
 
 Default free OpenRouter model: `openai/gpt-oss-120b:free`
 
 Local UI: `http://localhost:8501`
+
+Restart the UI later with either:
+
+- `python tools/run_ui.py`
+- `powershell -ExecutionPolicy Bypass -File tools/start_ui.ps1`
+
+If you want production-safe Modal deployment, create a Modal secret and set `MODAL_SECRET_NAME` in your local `.env.local`.
 
 Useful smoke-test overrides:
 
@@ -35,3 +42,7 @@ Useful smoke-test overrides:
 
 - PDF report: `.tmp/output/<run_id>/report.pdf`
 - JSON manifest: `.tmp/output/<run_id>/manifest.json`
+
+To fetch the latest Modal-generated PDF back to your machine:
+
+`python tools/download_latest_modal_report.py`
