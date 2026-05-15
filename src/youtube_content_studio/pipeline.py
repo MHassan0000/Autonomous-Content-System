@@ -4,7 +4,7 @@ import asyncio
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .analysis import AnalysisEngine
 from .cache import SQLiteCache
@@ -21,8 +21,9 @@ from .youtube_search import YouTubeResearcher, YouTubeVideoLoader
 
 
 class Pipeline:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, event_callback: Callable[[str, dict[str, Any]], None] | None = None):
         self.settings = settings
+        self.event_callback = event_callback
         self.run_id = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
         self.output_dir = ensure_dir(Path(settings.resolved_output_dir()) / self.run_id)
         self.logger = setup_logging("youtube_content_studio", settings.log_level, self.output_dir, self.run_id)
@@ -38,19 +39,38 @@ class Pipeline:
 
     async def run(self) -> PipelineResult:
         self.logger.info("Starting pipeline run %s", self.run_id)
+        self._emit("pipeline_started", progress=0.0, message="Pipeline started", run_id=self.run_id)
 
+        self._emit("research_started", progress=0.05, message="Researching YouTube content")
         candidates = await self._research()
-        loaded_candidates = await self._load_metadata(candidates)
-        ranked_candidates = self._rank_candidates(loaded_candidates)
+        self._emit("research_completed", progress=0.15, message="Research complete", candidate_count=len(candidates))
 
+        self._emit("metadata_started", progress=0.18, message="Fetching video metadata")
+        loaded_candidates = await self._load_metadata(candidates)
+        self._emit("metadata_completed", progress=0.28, message="Metadata complete", candidate_count=len(loaded_candidates))
+
+        self._emit("ranking_started", progress=0.30, message="Ranking candidate videos")
+        ranked_candidates = self._rank_candidates(loaded_candidates)
+        self._emit("ranking_completed", progress=0.35, message="Ranking complete", candidate_count=len(ranked_candidates))
+
+        self._emit("transcripts_started", progress=0.38, message="Extracting transcripts")
         transcripts = await self._extract_transcripts(ranked_candidates[: self.settings.top_videos_to_analyze])
+        self._emit("transcripts_completed", progress=0.50, message="Transcripts ready", transcript_count=len(transcripts))
+
+        self._emit("analysis_started", progress=0.52, message="Analyzing viral structure")
         research_summary = self._build_research_summary(ranked_candidates)
 
         analyses = await self.analysis_engine.analyze_many(ranked_candidates[: self.settings.top_videos_to_analyze], transcripts, research_summary)
         ranked_analyses = self._rank_analyses(ranked_candidates[: self.settings.top_videos_to_analyze], analyses)
+        self._emit("analysis_completed", progress=0.70, message="Analysis complete", analysis_count=len(ranked_analyses))
 
+        self._emit("briefs_started", progress=0.72, message="Generating content briefs")
         briefs = await self.generator.generate_briefs(research_summary, ranked_analyses, count=self.settings.ideas_per_run)
+        self._emit("briefs_completed", progress=0.82, message="Briefs ready", brief_count=len(briefs))
+
+        self._emit("packages_started", progress=0.84, message="Generating scripts and repurposed assets")
         packages = await self._generate_packages(briefs, ranked_analyses, ranked_candidates)
+        self._emit("packages_completed", progress=0.93, message="Packages complete", package_count=len(packages))
 
         research_summary = self._finalize_research_summary(research_summary, ranked_analyses, briefs, packages)
 
@@ -67,7 +87,9 @@ class Pipeline:
 
         result.pdf_path = str(self.report_builder.build(result, self.output_dir / "report.pdf"))
         result.manifest_path = str(self._write_manifest(result))
+        self._emit("report_completed", progress=0.98, message="Report rendered", pdf_path=result.pdf_path)
         self.logger.info("Pipeline complete: %s", result.pdf_path)
+        self._emit("pipeline_completed", progress=1.0, message="Pipeline finished", pdf_path=result.pdf_path, manifest_path=result.manifest_path)
         return result
 
     async def close(self) -> None:
@@ -197,9 +219,17 @@ class Pipeline:
             json.dump(payload, fh, indent=2, ensure_ascii=False)
         return manifest_path
 
+    def _emit(self, event: str, **data: Any) -> None:
+        if not self.event_callback:
+            return
+        try:
+            self.event_callback(event, data)
+        except Exception:
+            self.logger.debug("Event callback failed for %s", event)
 
-async def run_pipeline(settings: Settings) -> PipelineResult:
-    pipeline = Pipeline(settings)
+
+async def run_pipeline(settings: Settings, event_callback: Callable[[str, dict[str, Any]], None] | None = None) -> PipelineResult:
+    pipeline = Pipeline(settings, event_callback=event_callback)
     try:
         result = await pipeline.run()
         return result

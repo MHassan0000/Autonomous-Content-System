@@ -17,8 +17,11 @@ WAT-based Python workflow for an AI-niche YouTube content studio.
 2. Install dependencies: `pip install -r requirements.txt`
 3. Copy `.env.example` to `.env.local` or edit your existing `.env.local` and set `OPENROUTER_API_KEY`.
 4. Run: `python tools/run_pipeline.py`
+5. Launch UI: `python tools/run_ui.py`
 
 Default free OpenRouter model: `openai/gpt-oss-120b:free`
+
+Local UI: `http://localhost:8501`
 
 Useful smoke-test overrides:
 
