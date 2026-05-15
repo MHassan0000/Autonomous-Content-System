@@ -81,6 +81,8 @@ class Pipeline:
     async def _load_metadata(self, candidates: list[VideoCandidate]) -> list[VideoCandidate]:
         if not candidates:
             return []
+        if self.settings.skip_video_metadata:
+            return candidates
         sem = asyncio.Semaphore(self.settings.full_info_concurrency)
 
         async def _load(candidate: VideoCandidate):
@@ -97,6 +99,20 @@ class Pipeline:
         return sorted(candidates, key=lambda item: item.trend_score, reverse=True)
 
     async def _extract_transcripts(self, candidates: list[VideoCandidate]) -> dict[str, TranscriptDocument]:
+        if self.settings.skip_transcripts:
+            transcripts: dict[str, TranscriptDocument] = {}
+            for candidate in candidates:
+                fallback_text = f"{candidate.title} {candidate.description}".strip()
+                transcripts[candidate.video_id] = TranscriptDocument(
+                    video_id=candidate.video_id,
+                    language=self.settings.transcript_language,
+                    source="skipped",
+                    segments=[],
+                    text=fallback_text,
+                    word_count=len(fallback_text.split()),
+                    excerpt=fallback_text[: self.settings.transcript_excerpt_chars],
+                )
+            return transcripts
         sem = asyncio.Semaphore(self.settings.full_info_concurrency)
 
         async def _extract(candidate: VideoCandidate):

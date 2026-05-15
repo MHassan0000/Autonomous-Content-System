@@ -15,8 +15,18 @@ WAT-based Python workflow for an AI-niche YouTube content studio.
 
 1. Create and activate a virtual environment.
 2. Install dependencies: `pip install -r requirements.txt`
-3. Copy `.env.example` to `.env` and set `OPENROUTER_API_KEY`.
+3. Copy `.env.example` to `.env.local` or edit your existing `.env.local` and set `OPENROUTER_API_KEY`.
 4. Run: `python tools/run_pipeline.py`
+
+Default free OpenRouter model: `openai/gpt-oss-120b:free`
+
+Useful smoke-test overrides:
+
+- `YOUTUBE_SEARCH_QUERIES=AI news`
+- `MAX_CANDIDATE_VIDEOS=3`
+- `TOP_VIDEOS_TO_ANALYZE=1`
+- `IDEAS_PER_RUN=1`
+- `SHORTS_PER_IDEA=1`
 
 ## Output
 

@@ -59,6 +59,8 @@ class Settings:
     transcript_language: str = "en"
     transcript_excerpt_chars: int = 7000
     analysis_excerpt_chars: int = 4500
+    video_info_timeout_seconds: int = 20
+    transcript_timeout_seconds: int = 20
     cache_db_path: Path = Path(".tmp/cache.sqlite3")
     output_dir: Path = Path(".tmp/output")
     log_level: str = "INFO"
@@ -66,6 +68,8 @@ class Settings:
     request_timeout_seconds: int = 90
     llm_temperature: float = 0.35
     use_playwright_fallback: bool = False
+    skip_video_metadata: bool = False
+    skip_transcripts: bool = False
     search_modes: List[str] = field(default_factory=lambda: ["relevance", "date"])
 
     def resolved_output_dir(self) -> Path:
@@ -106,8 +110,9 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    load_dotenv()
     project_root = Path(__file__).resolve().parents[2]
+    load_dotenv(dotenv_path=project_root / ".env.local", override=False)
+    load_dotenv(dotenv_path=project_root / ".env", override=False)
 
     default_queries = [
         "AI news",
@@ -125,7 +130,7 @@ def load_settings() -> Settings:
         niche=os.getenv("NICHE", os.getenv("NICHe", "AI")),
         report_title=os.getenv("REPORT_TITLE", "Autonomous AI Content Studio"),
         openrouter_api_key=os.getenv("OPENROUTER_API_KEY", "").strip(),
-        openrouter_model=os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini").strip(),
+        openrouter_model=os.getenv("OPENROUTER_MODEL", "openai/gpt-oss-120b:free").strip(),
         openrouter_base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").strip(),
         openrouter_app_name=os.getenv("OPENROUTER_APP_NAME", "Autonomous Content Studio").strip(),
         openrouter_site_url=os.getenv("OPENROUTER_SITE_URL", "http://localhost").strip(),
@@ -141,6 +146,8 @@ def load_settings() -> Settings:
         transcript_language=os.getenv("TRANSCRIPT_LANGUAGE", "en").strip(),
         transcript_excerpt_chars=_parse_int(os.getenv("TRANSCRIPT_EXCERPT_CHARS"), 7000),
         analysis_excerpt_chars=_parse_int(os.getenv("ANALYSIS_EXCERPT_CHARS"), 4500),
+        video_info_timeout_seconds=_parse_int(os.getenv("VIDEO_INFO_TIMEOUT_SECONDS"), 20),
+        transcript_timeout_seconds=_parse_int(os.getenv("TRANSCRIPT_TIMEOUT_SECONDS"), 20),
         cache_db_path=Path(os.getenv("CACHE_DB_PATH", ".tmp/cache.sqlite3")),
         output_dir=Path(os.getenv("OUTPUT_DIR", ".tmp/output")),
         log_level=os.getenv("LOG_LEVEL", "INFO").strip().upper(),
@@ -148,7 +155,8 @@ def load_settings() -> Settings:
         request_timeout_seconds=_parse_int(os.getenv("REQUEST_TIMEOUT_SECONDS"), 90),
         llm_temperature=_parse_float(os.getenv("LLM_TEMPERATURE"), 0.35),
         use_playwright_fallback=_parse_bool(os.getenv("USE_PLAYWRIGHT_FALLBACK"), False),
+        skip_video_metadata=_parse_bool(os.getenv("SKIP_VIDEO_METADATA"), False),
+        skip_transcripts=_parse_bool(os.getenv("SKIP_TRANSCRIPTS"), False),
     )
 
     return settings
-

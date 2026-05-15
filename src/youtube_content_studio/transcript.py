@@ -27,7 +27,19 @@ class TranscriptExtractor:
             if cached:
                 return TranscriptDocument(**cached)
 
-        transcript = await asyncio.to_thread(self._extract_sync, video)
+        try:
+            transcript = await asyncio.wait_for(asyncio.to_thread(self._extract_sync, video), timeout=self.settings.transcript_timeout_seconds)
+        except Exception as exc:
+            self.logger.debug("Transcript extraction failed for %s: %s", video.video_id, exc)
+            transcript = TranscriptDocument(
+                video_id=video.video_id,
+                language=self.settings.transcript_language,
+                source="metadata_fallback",
+                segments=[],
+                text=normalize_whitespace(f"{video.title} {video.description}"),
+                word_count=len(normalize_whitespace(f"{video.title} {video.description}").split()),
+                excerpt=truncate_text(normalize_whitespace(f"{video.title} {video.description}"), self.settings.transcript_excerpt_chars),
+            )
         if self.cache:
             self.cache.set_json("youtube_transcript", cache_key, transcript.__dict__, ttl_seconds=7 * 24 * 3600)
         return transcript
@@ -64,10 +76,6 @@ class TranscriptExtractor:
         )
 
     def _fetch_with_youtube_transcript_api(self, video_id: str) -> list[dict[str, Any]]:
-        api = YouTubeTranscriptApi
-
-        candidates: list[list[dict[str, Any]]] = []
-
         # Newer versions may expose fetch() on an instance; older versions use class methods.
         try_methods = []
         instance = YouTubeTranscriptApi()
@@ -82,6 +90,22 @@ class TranscriptExtractor:
                 return transcript.fetch()
 
             try_methods.append(_list_method)
+
+            def _fallback_any_language():
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                for transcript in transcript_list:
+                    try:
+                        return transcript.fetch()
+                    except Exception:
+                        if getattr(transcript, "is_translatable", False):
+                            try:
+                                return transcript.translate(self.settings.transcript_language).fetch()
+                            except Exception:
+                                continue
+                        continue
+                raise RuntimeError("No usable transcript available")
+
+            try_methods.append(_fallback_any_language)
 
         last_error: Exception | None = None
         for method in try_methods:
@@ -161,10 +185,14 @@ class TranscriptExtractor:
         return None
 
     def _download_caption_text(self, url: str) -> str:
-        with httpx.Client(timeout=self.settings.request_timeout_seconds) as client:
-            response = client.get(url)
-            response.raise_for_status()
-            return response.text
+        try:
+            with httpx.Client(timeout=self.settings.request_timeout_seconds) as client:
+                response = client.get(url)
+                response.raise_for_status()
+                return response.text
+        except Exception as exc:
+            self.logger.debug("Caption download failed for %s: %s", url, exc)
+            return ""
 
     def _parse_caption_text(self, text: str, ext: str) -> list[dict[str, Any]]:
         ext = (ext or "").lower()

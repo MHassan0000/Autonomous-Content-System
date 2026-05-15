@@ -262,7 +262,14 @@ class YouTubeVideoLoader:
             if cached:
                 return VideoCandidate(**cached)
 
-        metadata = await asyncio.to_thread(self._extract_metadata_sync, candidate.video_id)
+        try:
+            metadata = await asyncio.wait_for(
+                asyncio.to_thread(self._extract_metadata_sync, candidate.video_id),
+                timeout=self.settings.video_info_timeout_seconds,
+            )
+        except Exception as exc:
+            self.logger.debug("Video metadata fetch failed for %s: %s", candidate.video_id, exc)
+            metadata = {}
         if metadata:
             candidate = self._merge(candidate, metadata)
         candidate.age_days = compute_age_days(candidate.published_at)
@@ -297,6 +304,7 @@ class YouTubeVideoLoader:
             "noplaylist": True,
             "nocheckcertificate": True,
             "extract_flat": False,
+            "socket_timeout": self.settings.video_info_timeout_seconds,
         }
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
