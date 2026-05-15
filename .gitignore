@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+.tmp/downloads/
 credentials.json
 token.json
 __pycache__/
@@ -11,3 +12,5 @@ __pycache__/
 .streamlit/
 .modal/
 *.log
+.venv/
+.python-version

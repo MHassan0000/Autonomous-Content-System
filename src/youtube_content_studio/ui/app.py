@@ -182,6 +182,7 @@ def _render_overview_tab(settings, state, result):
         run_clicked = st.button("Run Workflow", type="primary", use_container_width=True)
         clear_clicked = st.button("Clear Session", use_container_width=True)
         st.caption("The workflow runs the same engine used by the CLI and produces a PDF plus JSON manifest.")
+        st.caption("Full runs can take several minutes. Free models and transcript scraping are the main latency sources.")
     with status_col:
         st.metric("Progress", f"{state['progress']:.0%}")
         st.metric("Status", state["status"])
@@ -213,6 +214,16 @@ def _render_overview_tab(settings, state, result):
             c1.metric("Briefs", summary["brief_count"])
             c2.metric("Packages", summary["package_count"])
             st.code(summary.get("pdf_path", ""))
+            pdf_path = summary.get("pdf_path")
+            if pdf_path and Path(pdf_path).exists():
+                with open(pdf_path, "rb") as fh:
+                    st.download_button(
+                        "Download Report PDF",
+                        fh,
+                        file_name=Path(pdf_path).name,
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
         else:
             st.caption("No output yet. Run the workflow to generate a report.")
 
